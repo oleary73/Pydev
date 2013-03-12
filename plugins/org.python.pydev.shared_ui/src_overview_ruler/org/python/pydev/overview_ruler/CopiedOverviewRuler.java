@@ -25,6 +25,7 @@ import org.eclipse.jface.text.IRegion;
 import org.eclipse.jface.text.ITextListener;
 import org.eclipse.jface.text.ITextViewer;
 import org.eclipse.jface.text.ITextViewerExtension5;
+import org.eclipse.jface.text.JFaceTextUtil;
 import org.eclipse.jface.text.Position;
 import org.eclipse.jface.text.Region;
 import org.eclipse.jface.text.TextEvent;
@@ -36,7 +37,9 @@ import org.eclipse.jface.text.source.IAnnotationModel;
 import org.eclipse.jface.text.source.IAnnotationModelListener;
 import org.eclipse.jface.text.source.IAnnotationModelListenerExtension;
 import org.eclipse.jface.text.source.IOverviewRuler;
+import org.eclipse.jface.text.source.IOverviewRulerExtension;
 import org.eclipse.jface.text.source.ISharedTextColors;
+import org.eclipse.jface.text.source.OverviewRuler;
 import org.eclipse.jface.text.source.projection.AnnotationBag;
 import org.eclipse.jface.util.Util;
 import org.eclipse.swt.SWT;
@@ -60,18 +63,22 @@ import org.eclipse.swt.widgets.Canvas;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Display;
+import org.eclipse.swt.widgets.ScrollBar;
 
 /**
- * Ruler presented next to a source viewer showing all annotations of the
- * viewer's annotation model in a compact format. The ruler has the same height
- * as the source viewer.
+ * Ruler presented next to a source viewer showing all annotations of the viewer's annotation model
+ * in a compact format. The ruler has the same height as the source viewer.
  * <p>
- * Clients usually instantiate and configure objects of this class.</p>
- *
+ * This overview ruler uses non-saturated colors unless {@link #setUseSaturatedColors(boolean)} gets
+ * called.
+ * </p>
+ * <p>
+ * Clients usually instantiate and configure objects of this class.
+ * </p>
+ * 
  * @since 2.1
  */
-@SuppressWarnings({ "unchecked", "rawtypes" })
-public class CopiedOverviewRuler implements IOverviewRuler {
+public class CopiedOverviewRuler implements IOverviewRulerExtension, IOverviewRuler {
 
     /**
      * Internal listener class.
@@ -306,8 +313,8 @@ public class CopiedOverviewRuler implements IOverviewRuler {
             Rectangle r = new Rectangle(INSET, y, s.x - (2 * INSET), 2 * ANNOTATION_HEIGHT);
             e.gc.fillRectangle(r);
 
-            //          Display d= fHeader.getDisplay();
-            //          drawBevelRect(e.gc, r.x, r.y, r.width -1, r.height -1, d.getSystemColor(SWT.COLOR_WIDGET_NORMAL_SHADOW), d.getSystemColor(SWT.COLOR_WIDGET_HIGHLIGHT_SHADOW));
+            //			Display d= fHeader.getDisplay();
+            //			drawBevelRect(e.gc, r.x, r.y, r.width -1, r.height -1, d.getSystemColor(SWT.COLOR_WIDGET_NORMAL_SHADOW), d.getSystemColor(SWT.COLOR_WIDGET_HIGHLIGHT_SHADOW));
             drawBevelRect(e.gc, r.x, r.y, r.width - 1, r.height - 1, fSeparatorColor, fSeparatorColor);
 
             e.gc.setForeground(fSeparatorColor);
@@ -319,6 +326,74 @@ public class CopiedOverviewRuler implements IOverviewRuler {
             }
         }
     }
+
+    /**
+     * Container for cached widget infos.
+     * 
+     * @since 3.7
+     */
+    static class WidgetInfos {
+        /**
+         * the text widget line count
+         */
+        int maxLines;
+        /**
+         * the height of the vertical scrollbar thumb
+         */
+        int thumbHeight;
+        /**
+         * the visible lines of the text widget
+         */
+        double visibleLines;
+        /**
+         * the invisible lines of the text widget
+         */
+        double invisibleLines;
+        /**
+         * the bounds of {@link OverviewRuler#fCanvas}
+         */
+        Rectangle bounds;
+        /**
+         * the writable area in the text widget (height of all lines in pixels)
+         */
+        int writable;
+
+        /**
+         * Initializes the widget infos.
+         * 
+         * @param textWidget the text widget
+         * @param canvas the overview ruler canvas
+         */
+        public WidgetInfos(StyledText textWidget, Canvas canvas) {
+            maxLines = textWidget.getLineCount();
+            bounds = canvas.getBounds();
+            writable = JFaceTextUtil.computeLineHeight(textWidget, 0, maxLines, maxLines);
+
+            ScrollBar verticalBar = textWidget.getVerticalBar();
+            thumbHeight = (verticalBar != null && verticalBar.getVisible()) ? Math.max(
+                    Math.min(bounds.height, verticalBar.getThumbBounds().height),
+                    0) : 0;
+            thumbHeight = 1;
+
+            int partialTopIndex = JFaceTextUtil.getPartialTopIndex(textWidget);
+            int topLineHeight = textWidget.getLineHeight(textWidget.getOffsetAtLine(partialTopIndex));
+            int topLinePixel = textWidget.getLinePixel(partialTopIndex);
+            double topIndex = partialTopIndex - (double) topLinePixel / topLineHeight;
+
+            int partialBottomIndex = JFaceTextUtil.getPartialBottomIndex(textWidget);
+            int bottomLineHeight = textWidget.getLineHeight(textWidget.getOffsetAtLine(partialBottomIndex));
+            int bottomLinePixel = textWidget.getLinePixel(partialBottomIndex);
+            double bottomIndex = partialBottomIndex - ((double) bottomLinePixel - textWidget.getClientArea().height)
+                    / bottomLineHeight;
+
+            visibleLines = bottomIndex - topIndex;
+            invisibleLines = maxLines - visibleLines;
+        }
+    }
+
+    private static final boolean DEBUG_DRAW = false;
+    private static final boolean DEBUG_COMPUTE_Y = false;
+    private static final boolean DEBUG_TO_DOCUMENT_LINE_NUMBER = false;
 
     /**
      * <code>true</code> if we're on a Mac, where "new GC(canvas)" is expensive.
@@ -334,9 +409,9 @@ public class CopiedOverviewRuler implements IOverviewRuler {
     /** The model of the overview ruler */
     private IAnnotationModel fModel;
     /** The view to which this ruler is connected */
-    protected ITextViewer fTextViewer; //fabioz: changed to protected
+    protected ITextViewer fTextViewer;
     /** The ruler's canvas */
-    protected Canvas fCanvas; //fabioz: changed to protected
+    protected Canvas fCanvas;
     /** The ruler's header */
     private Canvas fHeader;
     /** The buffer for double buffering */
@@ -434,6 +509,13 @@ public class CopiedOverviewRuler implements IOverviewRuler {
      * @since 3.4
      */
     private boolean fIsTemporaryAnnotationDiscolored;
+
+    /**
+     * Tells whether saturated colors are used in the overview ruler.
+     * 
+     * @since 3.8
+     */
+    private boolean fUseSaturatedColors = false;
 
     /**
      * Constructs a overview ruler of the given width using the given annotation access and the given
@@ -547,6 +629,7 @@ public class CopiedOverviewRuler implements IOverviewRuler {
             public void mouseUp(MouseEvent event) {
                 handleMouseUp(event);
             }
+
         });
 
         fCanvas.addMouseMoveListener(new MouseMoveListener() {
@@ -589,11 +672,20 @@ public class CopiedOverviewRuler implements IOverviewRuler {
     }
 
     /**
+    * Handles mouse clicks.
+    *
+    * @param event the mouse button down event
+    */
+    protected void handleMouseUp(MouseEvent event) {
+        //Available for subclasses.
+    }
+
+    /**
      * Double buffer drawing.
      *
      * @param dest the GC to draw into
      */
-    protected void doubleBufferPaint(GC dest) { //fabioz: changed to protected
+    protected void doubleBufferPaint(GC dest) {
 
         Point size = fCanvas.getSize();
 
@@ -617,7 +709,7 @@ public class CopiedOverviewRuler implements IOverviewRuler {
 
             cacheAnnotations();
 
-            doPaint1(gc);
+            doPaint(gc);
 
         } finally {
             gc.dispose();
@@ -645,26 +737,25 @@ public class CopiedOverviewRuler implements IOverviewRuler {
     }
 
     /**
-     * Draws this overview ruler. Uses <code>ITextViewerExtension5</code> for
-     * its implementation. Will replace <code>doPaint(GC)</code>.
+     * Draws this overview ruler.
      *
      * @param gc the GC to draw into
      */
-    protected void doPaint1(GC gc) { //fabioz: Changed to protected
+    protected void doPaint(GC gc) {
 
         Rectangle r = new Rectangle(0, 0, 0, 0);
         int yy, hh = ANNOTATION_HEIGHT;
 
-        ITextViewerExtension5 extension = (ITextViewerExtension5) fTextViewer;
         IDocument document = fTextViewer.getDocument();
         StyledText textWidget = fTextViewer.getTextWidget();
+        ITextViewerExtension5 extension = null;
+        IRegion visible = null;
+        if (fTextViewer instanceof ITextViewerExtension5)
+            extension = (ITextViewerExtension5) fTextViewer;
+        else
+            visible = fTextViewer.getVisibleRegion(); // legacy support
 
-        int maxLines = getLineCount(textWidget);
-        Point size = fCanvas.getSize();
-        //Removed: that's not what we expect when drawing the minimap.
-        //int writable = JFaceTextUtil.computeLineHeight(textWidget, 0, maxLines, maxLines);
-        //if (size.y > writable)
-        //    size.y = Math.max(writable - fHeader.getSize().y, 0);
+        WidgetInfos infos = null;
 
         for (Iterator iterator = fAnnotationsSortedByLayer.iterator(); iterator.hasNext();) {
             Object annotationType = iterator.next();
@@ -674,77 +765,155 @@ public class CopiedOverviewRuler implements IOverviewRuler {
 
             int[] style = new int[] { FilterIterator.PERSISTENT, FilterIterator.TEMPORARY };
             for (int t = 0; t < style.length; t++) {
-
-                Iterator e = new FilterIterator(annotationType, style[t], fCachedAnnotations.iterator());
-
                 boolean areColorsComputed = false;
                 Color fill = null;
                 Color stroke = null;
 
+                Iterator e = new FilterIterator(annotationType, style[t], fCachedAnnotations.iterator());
                 while (e.hasNext()) {
-
                     Annotation a = (Annotation) e.next();
                     Position p = fModel.getPosition(a);
 
                     if (p == null)
                         continue;
-
-                    IRegion widgetRegion = extension.modelRange2WidgetRange(new Region(p.getOffset(), p.getLength()));
-                    if (widgetRegion == null)
+                    if (visible != null && !p.overlapsWith(visible.getOffset(), visible.getLength()))
                         continue;
 
+                    int annotationOffset = p.getOffset();
+                    int annotationLength = p.getLength();
+                    IRegion widgetRegion = null;
+                    if (visible != null) {
+                        annotationOffset = Math.max(p.getOffset(), visible.getOffset());
+                        int annotationEnd = Math.min(p.getOffset() + p.getLength(),
+                                visible.getOffset() + visible.getLength());
+                        annotationLength = annotationEnd - annotationOffset;
+                    } else {
+                        widgetRegion = extension.modelRange2WidgetRange(new Region(annotationOffset, annotationLength));
+                        if (widgetRegion == null)
+                            continue;
+                    }
+
+                    if (infos == null) {
+                        infos = new WidgetInfos(textWidget, fCanvas);
+                        r.x = INSET;
+                        r.width = infos.bounds.width - (2 * INSET);
+                    }
+
                     try {
+                        int startOffset = visible != null ? annotationOffset - visible.getOffset() : widgetRegion
+                                .getOffset();
+                        int startLine = textWidget.getLineAtOffset(startOffset);
+
+                        yy = computeY(startLine, infos);
+
                         if (ANNOTATION_HEIGHT_SCALABLE) {
-                            int numbersOfLines = document.getNumberOfLines(p.getOffset(), p.getLength());
-                            // don't count empty trailing lines
-                            IRegion lastLine = document.getLineInformationOfOffset(p.getOffset() + p.getLength());
-                            if (lastLine.getOffset() == p.getOffset() + p.getLength()) {
-                                numbersOfLines -= 2;
-                                hh = (numbersOfLines * size.y) / maxLines + ANNOTATION_HEIGHT;
-                                if (hh < ANNOTATION_HEIGHT)
-                                    hh = ANNOTATION_HEIGHT;
-                            } else
+                            int numberOfLines = document.getNumberOfLines(annotationOffset, annotationLength);
+                            // don't count empty trailing line
+                            IRegion lastLine = document.getLineInformationOfOffset(annotationOffset + annotationLength);
+                            if (lastLine.getOffset() == annotationOffset + annotationLength) {
+                                numberOfLines--;
+                            }
+                            if (numberOfLines > 1) {
+                                int yy2 = computeY(startLine + numberOfLines - 1, infos);
+                                hh = Math.max(yy2 - yy, ANNOTATION_HEIGHT);
+                            } else {
                                 hh = ANNOTATION_HEIGHT;
+                            }
                         }
                         fAnnotationHeight = hh;
 
-                        int startLine = textWidget.getLineAtOffset(widgetRegion.getOffset());
-                        yy = Math.min((startLine * size.y) / maxLines, size.y - hh);
-
                         if (!areColorsComputed) {
-                            fill = getFillColor(annotationType, style[t] == FilterIterator.TEMPORARY);
                             stroke = getStrokeColor(annotationType, style[t] == FilterIterator.TEMPORARY);
+                            fill = fUseSaturatedColors ? stroke : getFillColor(annotationType,
+                                    style[t] == FilterIterator.TEMPORARY);
                             areColorsComputed = true;
                         }
 
                         if (fill != null) {
                             gc.setBackground(fill);
-                            gc.fillRectangle(INSET, yy, size.x - (2 * INSET), hh);
+                            gc.fillRectangle(INSET, yy, infos.bounds.width - (2 * INSET), hh);
                         }
 
                         if (stroke != null) {
                             gc.setForeground(stroke);
-                            r.x = INSET;
                             r.y = yy;
-                            if (yy + hh == size.y)
+                            if (yy + hh == infos.bounds.height)
                                 r.y--;
-                            r.width = size.x - (2 * INSET);
                             r.height = hh;
                             gc.setLineWidth(0); // NOTE: 0 means width is 1 but with optimized performance
                             gc.drawRectangle(r);
                         }
-                    } catch (Exception x) {
+                    } catch (BadLocationException x) {
                     }
                 }
             }
         }
+
+        if (DEBUG_DRAW) {
+            // draw debugging guides (boundaries):
+            if (infos == null)
+                infos = new WidgetInfos(textWidget, fCanvas);
+            gc.setForeground(gc.getDevice().getSystemColor(SWT.COLOR_DARK_MAGENTA));
+            yy = infos.thumbHeight / 2;
+            gc.drawLine(0, yy, infos.bounds.x / 2, yy);
+            yy = infos.bounds.height - infos.thumbHeight / 2;
+            gc.drawLine(0, yy, infos.bounds.x / 2, yy);
+
+            gc.setForeground(gc.getDevice().getSystemColor(SWT.COLOR_BLUE));
+            yy = 0;
+            gc.drawLine(0, yy, infos.bounds.x / 2, yy);
+            yy = infos.bounds.height - 1;
+            gc.drawLine(0, yy, infos.bounds.x / 2, yy);
+        }
+    }
+
+    /**
+     * Computes and returns the y location of the given startLine.
+     * 
+     * @param startLine the start line
+     * @param infos the cached widget infos
+     * @return the vertical position of the given startLine in the overview ruler
+     * @since 3.7
+     */
+    private int computeY(int startLine, WidgetInfos infos) {
+        // this is the inverse of #toLineNumbers(int)
+
+        int yy;
+        if (infos.bounds.height > infos.writable || infos.invisibleLines <= 0) { // too few lines for relative positions: align annotations with textWidget lines
+            yy = Math.max(0, (2 * startLine + 1) * infos.writable / (infos.maxLines * 2) - infos.bounds.y);
+            if (DEBUG_COMPUTE_Y)
+                System.out.println("static: " + yy); //$NON-NLS-1$
+
+        } else if (startLine + 1 < infos.visibleLines / 2) { // before middle of first page: map to area from 0 to thumbHeight/2
+            yy = (int) (startLine * infos.thumbHeight / infos.visibleLines); // == startLine * (thumbHeight / 2) / (visibleLines / 2);
+            if (DEBUG_COMPUTE_Y)
+                System.out.println("start:  " + yy); //$NON-NLS-1$
+
+        } else if (infos.maxLines - infos.visibleLines / 2 <= startLine) { // after middle of last page: map to area from canvasHeight-1 - thumbHeight/2 to canvasHeight-1
+            yy = (int) (infos.bounds.height - 1 - (double) infos.thumbHeight / 2 + (startLine
+                    - (infos.maxLines - infos.visibleLines / 2) + 1)
+                    * infos.thumbHeight / infos.visibleLines);
+            if (DEBUG_COMPUTE_Y)
+                System.out.println("end:    " + yy); //$NON-NLS-1$
+
+        } else { // middle of text: map to area from thumbHeight/2 to (canvasHeight-1 - thumbHeight/2)
+            yy = (int) ((double) infos.thumbHeight / 2 + (startLine + 1 - infos.visibleLines / 2)
+                    * (infos.bounds.height - 1 - infos.thumbHeight) / infos.invisibleLines);
+            if (DEBUG_COMPUTE_Y)
+                System.out.println("middle: " + yy); //$NON-NLS-1$
+        }
+        // center of rectangle should be at the calculated position:
+        yy -= ANNOTATION_HEIGHT / 2;
+        // cap at start/end:
+        yy = Math.max(0, Math.min(yy, infos.bounds.height - 1 - ANNOTATION_HEIGHT));
+        return yy;
     }
 
     protected int getLineCount(StyledText textWidget) {
         int lineCount = textWidget.getLineCount();
-        if (lineCount < 100) {
-            lineCount = 100;
-        }
+        //        if (lineCount < 100) {
+        //            lineCount = 100;
+        //        }
         return lineCount;
     }
 
@@ -768,21 +937,19 @@ public class CopiedOverviewRuler implements IOverviewRuler {
     /**
      * Redraws the overview ruler.
      */
-    protected void redraw() { //fabioz change: made protected
+    protected void redraw() {
         if (fTextViewer == null || fModel == null)
             return;
 
         if (fCanvas != null && !fCanvas.isDisposed()) {
-            //if (IS_MAC) { -- Leave the MAC behavior the default for all platforms 
-            //(is this was more an optimization for it because new GC() was slow, so, simply
-            //use the same path for all platforms).
-            fCanvas.redraw();
-            fCanvas.update();
-            //} else {
-            //    GC gc = new GC(fCanvas);
-            //    doubleBufferPaint(gc);
-            //    gc.dispose();
-            //}
+            if (IS_MAC) {
+                fCanvas.redraw();
+                fCanvas.update();
+            } else {
+                GC gc = new GC(fCanvas);
+                doubleBufferPaint(gc);
+                gc.dispose();
+            }
         }
     }
 
@@ -793,32 +960,81 @@ public class CopiedOverviewRuler implements IOverviewRuler {
      * of the document.
      *
      * @param y_coordinate the y-coordinate
-     * @return the corresponding document lines
+     * @param annotationRect <code>true</code> to only consider the position of a drawn annotation rectangle,
+     * 	<code>false</code> to consider the whole line
+     * @return the corresponding document lines as {firstLine, lastLine}, or {-1, -1} if no lines correspond to the y-coordinate
      */
-    protected int[] toLineNumbers(int y_coordinate) {
+    protected int[] toLineNumbers(int y_coordinate, boolean annotationRect) {
+        // this is the inverse of #computeY(int, WidgetInfos)
 
-        StyledText textWidget = fTextViewer.getTextWidget();
-        int maxLines = getLineCount(textWidget);
+        WidgetInfos infos = new WidgetInfos(fTextViewer.getTextWidget(), fCanvas);
 
-        int rulerLength = fCanvas.getSize().y;
-        int writable = rulerLength;
-        //Removed: that's not what we expect when drawing the minimap.
-        //int writable = JFaceTextUtil.computeLineHeight(textWidget, 0, maxLines, maxLines);
-        //
-        //if (rulerLength > writable)
-        //    rulerLength = Math.max(writable - fHeader.getSize().y, 0);
-
-        if (y_coordinate >= writable || y_coordinate >= rulerLength)
+        if (y_coordinate >= infos.writable || y_coordinate >= infos.bounds.height || y_coordinate < 0)
             return new int[] { -1, -1 };
 
+        if (annotationRect && ANNOTATION_HEIGHT >= infos.bounds.height / infos.maxLines)
+            annotationRect = false;
+
         int[] lines = new int[2];
+        int[] pixels;
 
-        int pixel0 = Math.max(y_coordinate - 1, 0);
-        int pixel1 = Math.min(rulerLength, y_coordinate + 1);
-        rulerLength = Math.max(rulerLength, 1);
+        int pixelEnd = Math.min(infos.bounds.height, y_coordinate + ANNOTATION_HEIGHT / 2 + 1);
+        if (annotationRect) {
+            pixels = new int[] { pixelEnd };
+        } else {
+            int pixelStart = Math.max(y_coordinate - ANNOTATION_HEIGHT / 2 + 1, 0);
+            pixels = new int[] { pixelStart, pixelEnd };
+        }
 
-        lines[0] = (pixel0 * maxLines) / rulerLength;
-        lines[1] = (pixel1 * maxLines) / rulerLength;
+        if (infos.bounds.height > infos.writable || infos.invisibleLines <= 0) { // too few lines for relative positions: align annotations with textWidget lines
+            //			yy = Math.max(0, (2 * startLine + 1) * infos.writable / (infos.maxLines * 2) - infos.bounds.y);
+            for (int i = 0; i < pixels.length; i++)
+                lines[i] = (int) ((pixels[i] + infos.bounds.y) * infos.maxLines / (double) infos.writable);
+            if (DEBUG_TO_DOCUMENT_LINE_NUMBER)
+                System.out.println("static y: " + y_coordinate + " => [" + lines[0] + ", " + lines[1] + "]"); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$ //$NON-NLS-4$
+
+        } else if (y_coordinate < infos.thumbHeight / 2) { // before middle of first page: map to area from 0 to thumbHeight/2
+            //			yy= (int) (startLine * infos.thumbHeight / infos.visibleLines);
+            for (int i = 0; i < pixels.length; i++)
+                lines[i] = (int) (pixels[i] * infos.visibleLines / infos.thumbHeight);
+            if (DEBUG_TO_DOCUMENT_LINE_NUMBER)
+                System.out.println("start  y: " + y_coordinate + " => [" + lines[0] + ", " + lines[1] + "]"); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$ //$NON-NLS-4$
+
+        } else if (infos.bounds.height - 1 - infos.thumbHeight / 2 < y_coordinate) { // after middle of last page: map to area from canvasHeight-1 - thumbHeight/2 to canvasHeight-1
+            //			yy= (int) (infos.bounds.height-1 - (double)infos.thumbHeight / 2 + (startLine - (infos.maxLines - infos.visibleLines / 2) + 1) * infos.thumbHeight / infos.visibleLines);
+            for (int i = 0; i < pixels.length; i++)
+                lines[i] = (int) ((pixels[i] - (infos.bounds.height - 1) + (double) infos.thumbHeight / 2)
+                        * infos.visibleLines / infos.thumbHeight - 1 + (infos.maxLines - infos.visibleLines / 2));
+            if (DEBUG_TO_DOCUMENT_LINE_NUMBER)
+                System.out.println("end    y: " + y_coordinate + " => [" + lines[0] + ", " + lines[1] + "]"); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$ //$NON-NLS-4$
+
+        } else { // middle of text: map to area from thumbHeight/2 to (canvasHeight-1 - thumbHeight/2)
+            //			yy= (int) ((double)infos.thumbHeight/2 + (startLine + 1 - infos.visibleLines / 2) * (infos.bounds.height-1 - infos.thumbHeight) / infos.invisibleLines);
+            for (int i = 0; i < pixels.length; i++)
+                lines[i] = (int) ((pixels[i] - (double) infos.thumbHeight / 2) * infos.invisibleLines
+                        / (infos.bounds.height - 1 - infos.thumbHeight) - 1 + infos.visibleLines / 2);
+            if (DEBUG_TO_DOCUMENT_LINE_NUMBER)
+                System.out.println("middle y: " + y_coordinate + " => [" + lines[0] + ", " + lines[1] + "]"); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$ //$NON-NLS-4$
+        }
+
+        if (y_coordinate < ANNOTATION_HEIGHT && y_coordinate < infos.bounds.y)
+            lines[0] = 0;
+        else if (lines[0] < 0)
+            lines[0] = 0;
+
+        if (annotationRect) {
+            int y0 = computeY(lines[0], infos);
+            if (y_coordinate < y0 || y0 + ANNOTATION_HEIGHT < y_coordinate) {
+                lines[0] = -1;
+                lines[1] = -1;
+                return lines;
+            } else {
+                lines[1] = lines[0];
+            }
+        }
+
+        if (lines[1] > infos.maxLines)
+            lines[1] = infos.maxLines;
 
         if (fTextViewer instanceof ITextViewerExtension5) {
             ITextViewerExtension5 extension = (ITextViewerExtension5) fTextViewer;
@@ -834,6 +1050,8 @@ public class CopiedOverviewRuler implements IOverviewRuler {
             }
         }
 
+        if (DEBUG_TO_DOCUMENT_LINE_NUMBER)
+            System.out.println("result: [" + lines[0] + ", " + lines[1] + "]"); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
         return lines;
     }
 
@@ -843,7 +1061,7 @@ public class CopiedOverviewRuler implements IOverviewRuler {
      * @param lineNumbers the line range
      * @return the position of the first found annotation
      */
-    protected Position getAnnotationPosition(int[] lineNumbers) {
+    private Position getAnnotationPosition(int[] lineNumbers) {
         if (lineNumbers[0] == -1)
             return null;
 
@@ -922,7 +1140,9 @@ public class CopiedOverviewRuler implements IOverviewRuler {
      */
     protected void handleMouseDown(MouseEvent event) {
         if (fTextViewer != null) {
-            int[] lines = toLineNumbers(event.y);
+            int[] lines = toLineNumbers(event.y, true);
+            if (lines[0] == -1)
+                lines = toLineNumbers(event.y, false);
             Position p = getAnnotationPosition(lines);
             if (p == null && event.button == 1) {
                 try {
@@ -941,22 +1161,13 @@ public class CopiedOverviewRuler implements IOverviewRuler {
     }
 
     /**
-     * Handles mouse clicks.
-     *
-     * @param event the mouse button down event
-     */
-    protected void handleMouseUp(MouseEvent event) {
-        //Available for subclasses.
-    }
-
-    /**
      * Handles mouse moves.
      *
      * @param event the mouse move event
      */
     protected void handleMouseMove(MouseEvent event) {
         if (fTextViewer != null) {
-            int[] lines = toLineNumbers(event.y);
+            int[] lines = toLineNumbers(event.y, true);
             Position p = getAnnotationPosition(lines);
             Cursor cursor = (p != null ? fHitDetectionCursor : null);
             if (cursor != fLastCursor) {
@@ -1090,8 +1301,10 @@ public class CopiedOverviewRuler implements IOverviewRuler {
      * @return the interpolated color
      */
     private static RGB interpolate(RGB fg, RGB bg, double scale) {
-        return new RGB((int) ((1.0 - scale) * fg.red + scale * bg.red), (int) ((1.0 - scale) * fg.green + scale
-                * bg.green), (int) ((1.0 - scale) * fg.blue + scale * bg.blue));
+        return new RGB(
+                (int) ((1.0 - scale) * fg.red + scale * bg.red),
+                (int) ((1.0 - scale) * fg.green + scale * bg.green),
+                (int) ((1.0 - scale) * fg.blue + scale * bg.blue));
     }
 
     /**
@@ -1207,7 +1420,9 @@ public class CopiedOverviewRuler implements IOverviewRuler {
         if (fTextViewer == null || y_coordinate == -1)
             return -1;
 
-        int[] lineNumbers = toLineNumbers(y_coordinate);
+        int[] lineNumbers = toLineNumbers(y_coordinate, true);
+        if (lineNumbers[0] == -1)
+            lineNumbers = toLineNumbers(y_coordinate, false);
         int bestLine = findBestMatchingLineNumber(lineNumbers);
         if (bestLine == -1 && lineNumbers.length > 0)
             return lineNumbers[0];
@@ -1232,7 +1447,7 @@ public class CopiedOverviewRuler implements IOverviewRuler {
      * @see org.eclipse.jface.text.source.IOverviewRuler#hasAnnotation(int)
      */
     public boolean hasAnnotation(int y) {
-        return findBestMatchingLineNumber(toLineNumbers(y)) != -1;
+        return findBestMatchingLineNumber(toLineNumbers(y, true)) != -1;
     }
 
     /*
@@ -1344,5 +1559,14 @@ public class CopiedOverviewRuler implements IOverviewRuler {
 
         if (overview.length() > 0)
             fHeader.setToolTipText(overview);
+    }
+
+    /**
+     * {@inheritDoc}
+     * 
+     * @since 3.8
+     */
+    public void setUseSaturatedColors(boolean useSaturatedColor) {
+        fUseSaturatedColors = useSaturatedColor;
     }
 }

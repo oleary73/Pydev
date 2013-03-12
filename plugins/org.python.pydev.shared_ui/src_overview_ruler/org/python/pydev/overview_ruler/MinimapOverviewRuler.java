@@ -386,7 +386,7 @@ public class MinimapOverviewRuler extends CopiedOverviewRuler {
     private final RedrawJob redrawJob = new RedrawJob("Redraw overview ruler");
 
     @Override
-    protected void doPaint1(GC paintGc) {
+    protected void doPaint(GC paintGc) {
         //Draw the minimap
         if (fTextViewer != null) {
             IDocumentExtension4 document = (IDocumentExtension4) fTextViewer.getDocument();
@@ -502,7 +502,7 @@ public class MinimapOverviewRuler extends CopiedOverviewRuler {
                 }
             }
         }
-        super.doPaint1(paintGc);
+        super.doPaint(paintGc);
     }
 
     MouseEvent lastMouseDown = null;
@@ -538,7 +538,7 @@ public class MinimapOverviewRuler extends CopiedOverviewRuler {
      */
     private void handleDrag(MouseEvent event) {
         if (fTextViewer != null) {
-            int[] lines = toLineNumbers(event.y);
+            int[] lines = toLineNumbers(event.y, false);
             int selectedLine = lines[0];
             Position p = null;
             try {
@@ -565,5 +565,6 @@ public class MinimapOverviewRuler extends CopiedOverviewRuler {
             }
             fTextViewer.getTextWidget().setFocus();
         }
+
     }
 }
