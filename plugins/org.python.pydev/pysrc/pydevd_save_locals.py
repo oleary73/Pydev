@@ -349,3 +349,40 @@ if is_cpython and version in ('2.7',):
     # This is only valid for CPython!
     save_locals = create_save_locals()
 
+
+# Note: see http://www.voidspace.org.uk/python/weblog/arch_d7_2011_05_28.shtml on dealing with PyCell_Set/Get
+#def hide(obj):
+#    class Proxy(object):
+#        __slots__ = ()
+#        def __getattr__(self, name):
+#            return getattr(obj, name)
+#    return Proxy()
+#Here it is in action:
+#
+#>>> class Foo(object):
+#...     def __init__(self, a, b):
+#...         self.a = a
+#...         self.b = b
+#...
+#>>> f = Foo(1, 2)
+#>>> p = hide(f)
+#>>> p.a, p.b
+#(1, 2)
+#>>> p.a = 3
+#Traceback (most recent call last):
+#  ...
+#AttributeError: 'Proxy' object has no attribute 'a'
+#>>> cell_obj = p.__getattr__.func_closure[0]
+#>>> cell_obj.cell_contents
+#<__main__.Foo object at 0x...>
+#>>> import ctypes
+#>>> ctypes.pythonapi.PyCell_Get.restype = ctypes.py_object
+#>>> py_obj = ctypes.py_object(cell_obj)
+#>>> f2 = ctypes.pythonapi.PyCell_Get(py_obj)
+#>>> f2 is f
+#True
+#>>> new_py_obj = ctypes.py_object(Foo(5, 6))
+#>>> ctypes.pythonapi.PyCell_Set(py_obj, new_py_obj)
+#0
+#>>> p.a, p.b
+#(5, 6)
