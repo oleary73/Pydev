@@ -215,6 +215,60 @@ def create_save_locals():
         """
         Copy values from locals_dict into the fast stack slots in the given frame.
 
+        /* Copy values from the "locals" dict into the fast locals.
+
+           dict is an input argument containing string keys representing
+           variables names and arbitrary PyObject* as values.
+
+           map and values are input arguments.  map is a tuple of strings.
+           values is an array of PyObject*.  At index i, map[i] is the name of
+           the variable with value values[i].  The function copies the first
+           nmap variable from map/values into dict.  If values[i] is NULL,
+           the variable is deleted from dict.
+
+           If deref is true, then the values being copied are cell variables
+           and the value is extracted from the cell variable before being put
+           in dict.  If clear is true, then variables in map but not in dict
+           are set to NULL in map; if clear is false, variables missing in
+           dict are ignored.
+
+           Exceptions raised while modifying the dict are silently ignored,
+           because there is no good way to report them.
+        */
+
+        static void
+        dict_to_map(PyObject *map, Py_ssize_t nmap, PyObject *dict, PyObject **values,
+                    int deref, int clear)
+        {
+            Py_ssize_t j;
+            assert(PyTuple_Check(map));
+            assert(PyDict_Check(dict));
+            assert(PyTuple_Size(map) >= nmap);
+            for (j = nmap; --j >= 0; ) {
+                PyObject *key = PyTuple_GET_ITEM(map, j);
+                PyObject *value = PyObject_GetItem(dict, key);
+                assert(PyString_Check(key));
+                /* We only care about NULLs if clear is true. */
+                if (value == NULL) {
+                    PyErr_Clear();
+                    if (!clear)
+                        continue;
+                }
+                if (deref) {
+                    assert(PyCell_Check(values[j]));
+                    if (PyCell_GET(values[j]) != value) {
+                        if (PyCell_Set(values[j], value) < 0)
+                            PyErr_Clear();
+                    }
+                } else if (values[j] != value) {
+                    Py_XINCREF(value);
+                    Py_XDECREF(values[j]);
+                    values[j] = value;
+                }
+                Py_XDECREF(value);
+            }
+        }
+
         void
         PyFrame_LocalsToFast(PyFrameObject *f, int clear)
         {
@@ -268,14 +322,30 @@ def create_save_locals():
         frame_pointer = ctypes.c_void_p(id(frame))
         frame_wrapper = ctypes.cast(frame_pointer, ctypes.POINTER(FrameWrapper))
 
-        for i, name in enumerate(co.co_varnames):
+        # print co.co_nlocals
+        # print co.co_varnames
+        # print co.co_freevars
+        # CO_OPTIMIZED = 1 (from code.h)
+        # print co.co_flags & CO_OPTIMIZED
+
+        check = list(co.co_varnames)
+
+        for i, name in enumerate(check):
             if name in locals_dict:
                 frame_wrapper[0].f_localsplus[i] = locals_dict[name]
+
+        # For co_cellvars and co_freevars we can't do things directly, we must use
+        # ctypes.pythonapi.PyCell_Set(py_obj, new_py_obj) instead on the index of
+        # frame_wrapper[0].f_localsplus[i] -- still haven't worked it all through
+        # as the approach was changed to use ctypes.pythonapi.PyFrame_LocalsToFast.
+        #
+        # check.extend(co.co_cellvars)
+        # check.extend(co.co_freevars)
 
     return save_locals
 
 
 if is_cpython and version in ('2.7',):
-    #This is only valid for CPython!
+    # This is only valid for CPython!
     save_locals = create_save_locals()
 

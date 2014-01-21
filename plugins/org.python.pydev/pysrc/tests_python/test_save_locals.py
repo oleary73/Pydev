@@ -48,6 +48,37 @@ class TestSetLocals(unittest.TestCase):
         save_locals(l, frame)
         self.assertEquals(50, a)
 
+
+    def test_frame_co_freevars(self):
+
+        outer_var = 20
+
+        def func():
+            frame = sys._getframe()
+            l = dict(frame.f_locals)
+            l['outer_var'] = 50
+            save_locals(l, frame)
+            self.assertEquals(50, outer_var)
+
+        func()
+
+    def test_frame_co_cellvars(self):
+
+        def check_co_vars(a):
+            frame = sys._getframe()
+            def function2():
+                print a
+
+            assert 'a' in frame.f_code.co_cellvars
+            frame = sys._getframe()
+            l = dict()
+            l['a'] = 50
+            save_locals(l, frame)
+            self.assertEquals(50, a)
+
+        check_co_vars(1)
+
+
     def test_frame_change_in_inner_frame(self):
         def change(f):
             self.assert_(f is not sys._getframe())
@@ -67,5 +98,5 @@ if __name__ == '__main__':
 #    #suite.addTest(Test('testCase10a'))
 #    unittest.TextTestRunner(verbosity=3).run(suite)
 
-    suite = unittest.makeSuite(TestSetLocals)
-    unittest.TextTestRunner(verbosity=3).run(suite)
+#     suite = unittest.makeSuite(TestSetLocals)
+#     unittest.TextTestRunner(verbosity=3).run(suite)
