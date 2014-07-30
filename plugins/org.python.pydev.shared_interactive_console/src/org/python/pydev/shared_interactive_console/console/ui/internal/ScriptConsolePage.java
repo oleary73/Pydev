@@ -5,7 +5,7 @@
  * which accompanies this distribution, and is available at
  * http://www.eclipse.org/legal/epl-v10.html
  *
- 
+
  *******************************************************************************/
 package org.python.pydev.shared_interactive_console.console.ui.internal;
 
@@ -67,6 +67,7 @@ public class ScriptConsolePage extends TextConsolePage implements IScriptConsole
 
     private CloseScriptConsoleAction closeConsoleAction;
 
+    @Override
     protected void createActions() {
         super.createActions();
 
@@ -104,9 +105,10 @@ public class ScriptConsolePage extends TextConsolePage implements IScriptConsole
         menuManager.appendToGroup(SCRIPT_GROUP, closeConsoleAction);
     }
 
+    @Override
     protected TextConsoleViewer createViewer(Composite parent) {
         ScriptConsole console = (ScriptConsole) getConsole();
-        viewer = new ScriptConsoleViewer(parent, console, this, console.createStyleProvider(),
+        viewer = new ScriptConsoleViewer(parent, console, this,
                 console.getInitialCommands(), console.getFocusOnStart(), console.getBackspaceAction(),
                 console.getAutoEditStrategy(), console.getTabCompletionEnabled());
         viewer.configure(cfg);

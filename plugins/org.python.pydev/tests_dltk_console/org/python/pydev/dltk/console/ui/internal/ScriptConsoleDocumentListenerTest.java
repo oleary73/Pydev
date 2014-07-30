@@ -11,7 +11,6 @@ import java.util.List;
 
 import junit.framework.TestCase;
 
-import org.eclipse.debug.ui.console.IConsoleLineTracker;
 import org.eclipse.jface.text.Document;
 import org.eclipse.jface.text.IDocument;
 import org.eclipse.jface.text.contentassist.ICompletionProposal;
@@ -91,8 +90,8 @@ public class ScriptConsoleDocumentListenerTest extends TestCase {
                     }
                 },
 
-                prompt, new ScriptConsoleHistory(), new ArrayList<IConsoleLineTracker>(), "",
-                new PyAutoIndentStrategy());
+                prompt, new ScriptConsoleHistory(), "",
+                new PyAutoIndentStrategy(), null);
 
         PyAutoIndentStrategy strategy = (PyAutoIndentStrategy) listener.getIndentStrategy();
         strategy.setIndentPrefs(new TestIndentPrefs(true, 4));

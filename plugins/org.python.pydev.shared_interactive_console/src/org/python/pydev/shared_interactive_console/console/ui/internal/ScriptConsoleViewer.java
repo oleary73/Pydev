@@ -705,8 +705,8 @@ public class ScriptConsoleViewer extends TextConsoleViewer implements IScriptCon
         textAndPromptComposite = new TextAndPromptComposite(parent, SWT.None);
         super.createControl(textAndPromptComposite, styles);
 
-        textAndPromptComposite.createPrompt(styles);
-        textAndPromptComposite.setTextWidget(this.getTextWidget());
+        textAndPromptComposite.createOutputViewer(styles);
+        textAndPromptComposite.setInputTextWidget(this.getTextWidget());
     }
 
     /**
@@ -717,7 +717,7 @@ public class ScriptConsoleViewer extends TextConsoleViewer implements IScriptCon
      * @param contentHandler
      */
     public ScriptConsoleViewer(Composite parent, ScriptConsole console,
-            final IScriptConsoleContentHandler contentHandler, IConsoleStyleProvider styleProvider,
+            final IScriptConsoleContentHandler contentHandler,
             String initialCommands, boolean focusOnStart, AbstractHandleBackspaceAction handleBackspaceAction,
             IHandleScriptAutoEditStrategy strategy, boolean tabCompletionEnabled) {
         super(parent, console);
@@ -733,11 +733,14 @@ public class ScriptConsoleViewer extends TextConsoleViewer implements IScriptCon
         if (existingViewer == null) {
             this.isMainViewer = true;
             this.console.setViewer(this);
-            this.styleProvider = styleProvider;
+            this.styleProvider = console.createStyleProvider();
             this.history = console.getHistory();
 
+            OutputViewer outputViewer = textAndPromptComposite.getOutputViewer();
+            outputViewer.configure(console);
+
             this.listener = new ScriptConsoleDocumentListener(this, console, console.getPrompt(), console.getHistory(),
-                    console.getLineTrackers(), initialCommands, strategy);
+                    initialCommands, strategy, outputViewer);
 
             this.listener.setDocument(getDocument());
         } else {

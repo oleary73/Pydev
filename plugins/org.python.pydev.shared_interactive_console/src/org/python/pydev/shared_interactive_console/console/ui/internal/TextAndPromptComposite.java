@@ -3,11 +3,12 @@ package org.python.pydev.shared_interactive_console.console.ui.internal;
 import org.eclipse.swt.custom.StyledText;
 import org.eclipse.swt.graphics.Rectangle;
 import org.eclipse.swt.widgets.Composite;
+import org.python.pydev.shared_interactive_console.console.ui.ScriptConsolePartitioner;
 
 public class TextAndPromptComposite extends Composite {
 
-    private StyledText text;
-    private PromptViewer promptViewer;
+    private StyledText inputTextWidget;
+    private OutputViewer outputViewer;
 
     public TextAndPromptComposite(Composite parent, int style) {
         super(parent, style);
@@ -22,26 +23,29 @@ public class TextAndPromptComposite extends Composite {
     @Override
     public void setBounds(int x, int y, int width, int height) {
         super.setBounds(x, y, width, height);
-        if (text != null) {
+        if (inputTextWidget != null) {
             // TODO: Calculate this based on the text that exists on 'text' (50 should be min width, but
             // the prompt should expand if there's no text in 'text').
-            text.setBounds(x, y, width, height - 50);
+            inputTextWidget.setBounds(x, y + height - 50, width, 50);
         }
-        if (promptViewer != null) {
-            StyledText textWidget = promptViewer.getTextWidget();
+        if (outputViewer != null) {
+            StyledText textWidget = outputViewer.getTextWidget();
             if (textWidget != null) {
-                textWidget.setBounds(x, y + height - 50, width, 50);
+                textWidget.setBounds(x, y, width, height - 50);
             }
         }
     }
 
-    public void setTextWidget(StyledText textWidget) {
-        this.text = textWidget;
+    public void setInputTextWidget(StyledText textWidget) {
+        this.inputTextWidget = textWidget;
     }
 
-    public void createPrompt(int styles) {
-        PromptViewer textViewer = new PromptViewer(this, styles);
-        this.promptViewer = textViewer;
+    public void createOutputViewer(int styles) {
+        this.outputViewer = new OutputViewer(this, styles, new ScriptConsolePartitioner());
+    }
+
+    public OutputViewer getOutputViewer() {
+        return this.outputViewer;
     }
 
 }

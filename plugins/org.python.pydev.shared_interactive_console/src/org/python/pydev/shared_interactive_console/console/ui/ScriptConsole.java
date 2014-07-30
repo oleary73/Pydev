@@ -311,9 +311,9 @@ public abstract class ScriptConsole extends TextConsole implements ICommandHandl
     public abstract IConsoleStyleProvider createStyleProvider();
 
     /**
-     * @return a list of trackers that'll identify links in the console.
+     * @return a list of trackers that'll identify links in the console passed.
      */
-    public abstract List<IConsoleLineTracker> getLineTrackers();
+    public abstract List<IConsoleLineTracker> createLineTrackers(final TextConsole console);
 
     /**
      * @return the commands that should be initially set in the prompt.
