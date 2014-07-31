@@ -1,5 +1,6 @@
 package org.python.pydev.shared_interactive_console.console.ui.internal;
 
+import java.util.Arrays;
 import java.util.List;
 
 import org.eclipse.debug.ui.console.IConsoleLineTracker;
@@ -18,6 +19,7 @@ import org.python.pydev.shared_interactive_console.console.ui.IConsoleStyleProvi
 import org.python.pydev.shared_interactive_console.console.ui.ScriptConsole;
 import org.python.pydev.shared_interactive_console.console.ui.ScriptConsolePartitioner;
 import org.python.pydev.shared_interactive_console.console.ui.ScriptStyleRange;
+import org.python.pydev.shared_ui.utils.ShowScrollbarOnlyWhenNeeded;
 
 public class OutputViewer extends TextConsoleViewer {
 
@@ -29,6 +31,10 @@ public class OutputViewer extends TextConsoleViewer {
     private TextConsole console;
     public CallbackWithListeners<String> onTextAppended = new CallbackWithListeners<>();
 
+    //Just used to keep reference alive.
+    @SuppressWarnings("unused")
+    private ShowScrollbarOnlyWhenNeeded showScrollbarOnlyWhenNeeded;
+
     public OutputViewer(TextAndPromptComposite textAndPromptComposite, int styles,
             final ScriptConsolePartitioner partitioner) {
         this(textAndPromptComposite, styles, partitioner, new TextConsole("Internal console", null, null, false) {
@@ -38,7 +44,8 @@ public class OutputViewer extends TextConsoleViewer {
                 return partitioner;
             }
         });
-        getTextWidget().setAlwaysShowScrollBars(false);
+        showScrollbarOnlyWhenNeeded = new ShowScrollbarOnlyWhenNeeded(getTextWidget());
+
         this.setEditable(false);
 
     }
@@ -82,13 +89,18 @@ public class OutputViewer extends TextConsoleViewer {
         }
     }
 
+    public static final int STYLE_STDOUT = 0;
+    public static final int STYLE_STDERR = 1;
+    public static final int STYLE_PROMPT = 2;
+    public static final int STYLE_USERINPUT = 3;
+
     /**
      * Adds some text that came as an output to stdout or stderr to the console.
      *
      * @param out the text that should be added
      * @param stdout true if it came from stdout and also if it came from stderr
      */
-    public void addToConsoleView(String out, boolean stdout) {
+    public void addToConsoleView(String out, int outStyle) {
         if (out.length() == 0) {
             return; //nothing to add!
         }
@@ -98,10 +110,27 @@ public class OutputViewer extends TextConsoleViewer {
         IConsoleStyleProvider styleProvider = iConsoleStyleProvider;
         Tuple<List<ScriptStyleRange>, String> style = null;
         if (styleProvider != null) {
-            if (stdout) {
-                style = styleProvider.createInterpreterOutputStyle(out, start);
-            } else { //stderr
-                style = styleProvider.createInterpreterErrorStyle(out, start);
+            switch (outStyle) {
+                case STYLE_STDOUT:
+                    style = styleProvider.createInterpreterOutputStyle(out, start);
+                    break;
+
+                case STYLE_STDERR:
+                    style = styleProvider.createInterpreterErrorStyle(out, start);
+                    break;
+
+                case STYLE_PROMPT:
+                    style = new Tuple<List<ScriptStyleRange>, String>(Arrays.asList(styleProvider.createPromptStyle(
+                            out, start)), out);
+                    break;
+
+                case STYLE_USERINPUT:
+                    style = new Tuple<List<ScriptStyleRange>, String>(Arrays.asList(styleProvider.createUserInputStyle(
+                            out, start)), out);
+                    break;
+
+                default:
+                    break;
             }
             if (style != null) {
                 for (ScriptStyleRange s : style.o1) {

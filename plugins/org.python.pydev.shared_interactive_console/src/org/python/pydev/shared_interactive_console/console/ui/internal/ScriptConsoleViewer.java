@@ -65,6 +65,7 @@ import org.python.pydev.shared_interactive_console.console.ui.internal.actions.A
 import org.python.pydev.shared_interactive_console.console.ui.internal.actions.HandleDeletePreviousWord;
 import org.python.pydev.shared_interactive_console.console.ui.internal.actions.HandleLineStartAction;
 import org.python.pydev.shared_ui.bindings.KeyBindingHelper;
+import org.python.pydev.shared_ui.utils.ShowScrollbarOnlyWhenNeeded;
 
 /**
  * This is the viewer for the console. It's responsible for making sure that the actions the
@@ -692,6 +693,10 @@ public class ScriptConsoleViewer extends TextConsoleViewer implements IScriptCon
 
     private TextAndPromptComposite textAndPromptComposite;
 
+    //Just used to keep reference alive.
+    @SuppressWarnings("unused")
+    private ShowScrollbarOnlyWhenNeeded showScrollbarOnlyWhenNeeded;
+
     /**
      * Important: for the layout to work, this has to be the main controlled viewer.
      */
@@ -727,6 +732,7 @@ public class ScriptConsoleViewer extends TextConsoleViewer implements IScriptCon
 
         this.console = console;
         this.getTextWidget().setBackground(console.getPydevConsoleBackground());
+        showScrollbarOnlyWhenNeeded = new ShowScrollbarOnlyWhenNeeded(this.getTextWidget());
 
         ScriptConsoleViewer existingViewer = this.console.getViewer();
         getTextWidget().setAlwaysShowScrollBars(false);

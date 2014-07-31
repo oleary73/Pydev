@@ -237,8 +237,8 @@ public class ScriptConsoleDocumentListener implements IDocumentListener {
      */
     protected void processResult(final InterpreterResponse result) {
         if (result != null) {
-            outputViewer.addToConsoleView(result.out, true);
-            outputViewer.addToConsoleView(result.err, false);
+            outputViewer.addToConsoleView(result.out, OutputViewer.STYLE_STDOUT);
+            outputViewer.addToConsoleView(result.err, OutputViewer.STYLE_STDERR);
 
             history.commit();
             try {
@@ -302,6 +302,15 @@ public class ScriptConsoleDocumentListener implements IDocumentListener {
                 addedNewLine = true;
             }
         }
+
+        // TODO: Buffer on the client-side when more input is needed (commented code gives an idea but is completely wrong).
+        //        if (prompt.getNeedMore() && !prompt.getNeedInput()) {
+        //            String commandLine = getCommandLine();
+        //            System.out.println(commandLine);
+        //            if (commandLine.length() > 0 && Character.isWhitespace(commandLine.charAt(0))) {
+        //                return;
+        //            }
+        //        }
 
         String delim = getDelimeter();
 
@@ -377,7 +386,7 @@ public class ScriptConsoleDocumentListener implements IDocumentListener {
         applyStyleToUserAddedText(cmd, doc.getLength());
 
         //the cmd could be something as '\n'
-        appendText(cmd);
+        //appendText(cmd);
 
         //and the command line the actual contents to be executed at this time
         final String commandLine = getCommandLine();
@@ -387,7 +396,20 @@ public class ScriptConsoleDocumentListener implements IDocumentListener {
         // When the user presses a return and goes to a new line,  the contents of the current line are sent to
         // the interpreter (and its results properly handled).
 
-        appendText(getDelimeter());
+        //appendText(getDelimeter());
+
+        // Clear the document (the prompt will be added later when the command is executed).
+        startDisconnected();
+        try {
+            doc.set(""); //$NON-NLS-1$
+        } finally {
+            stopDisconnected();
+        }
+
+        outputViewer.addToConsoleView(this.prompt.toString(), OutputViewer.STYLE_PROMPT);
+        outputViewer.addToConsoleView(commandLine, OutputViewer.STYLE_USERINPUT);
+        outputViewer.addToConsoleView(getDelimeter(), OutputViewer.STYLE_USERINPUT);
+
         final boolean finalAddedNewLine = addedNewLine;
         final String finalDelim = delim;
 
@@ -446,8 +468,8 @@ public class ScriptConsoleDocumentListener implements IDocumentListener {
 
                     public void run() {
                         if (result != null) {
-                            outputViewer.addToConsoleView(result.o1, true);
-                            outputViewer.addToConsoleView(result.o2, false);
+                            outputViewer.addToConsoleView(result.o1, OutputViewer.STYLE_STDOUT);
+                            outputViewer.addToConsoleView(result.o2, OutputViewer.STYLE_STDERR);
                             revealEndOfDocument();
                         }
                     }
@@ -583,7 +605,7 @@ public class ScriptConsoleDocumentListener implements IDocumentListener {
                             startDisconnected();
 
                             // Add our completions to the console
-                            outputViewer.addToConsoleView(sb.toString(), true);
+                            outputViewer.addToConsoleView(sb.toString(), OutputViewer.STYLE_STDOUT);
 
                             // Re-add >>>
                             appendInvitation(false);
@@ -593,9 +615,9 @@ public class ScriptConsoleDocumentListener implements IDocumentListener {
 
                         // Auto-complete the command up to the longest common prefix (if it hasn't changed since we were last here)
                         if (!currentCommand.equals(commandLine) || fLongestCommonPrefix.isEmpty()) {
-                            outputViewer.addToConsoleView(currentCommand, true);
+                            outputViewer.addToConsoleView(currentCommand, OutputViewer.STYLE_STDOUT);
                         } else {
-                            outputViewer.addToConsoleView(fLongestCommonPrefix, true);
+                            outputViewer.addToConsoleView(fLongestCommonPrefix, OutputViewer.STYLE_STDOUT);
                         }
                     }
                 };
