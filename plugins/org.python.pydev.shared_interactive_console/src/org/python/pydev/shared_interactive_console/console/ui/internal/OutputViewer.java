@@ -94,6 +94,11 @@ public class OutputViewer extends TextConsoleViewer {
     public static final int STYLE_PROMPT = 2;
     public static final int STYLE_USERINPUT = 3;
 
+    @Override
+    public void revealEndOfDocument() {
+        super.revealEndOfDocument();
+    }
+
     /**
      * Adds some text that came as an output to stdout or stderr to the console.
      *

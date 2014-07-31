@@ -29,4 +29,8 @@ public interface IScriptConsoleViewer2ForDocumentListener {
 
     void revealEndOfDocument();
 
+    public void invalidateTextPresentation(int offset, int length);
+
+    void setEditable(boolean b);
+
 }

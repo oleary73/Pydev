@@ -74,6 +74,15 @@ public class ScriptConsoleDocumentListenerTest extends TestCase {
                     public int getCaretOffset() {
                         return 0;
                     }
+
+                    @Override
+                    public void invalidateTextPresentation(int offset, int length) {
+                    }
+
+                    @Override
+                    public void setEditable(boolean b) {
+
+                    }
                 },
 
                 new ICommandHandler() {

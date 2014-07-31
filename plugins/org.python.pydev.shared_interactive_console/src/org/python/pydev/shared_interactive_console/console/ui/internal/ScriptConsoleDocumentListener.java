@@ -212,6 +212,28 @@ public class ScriptConsoleDocumentListener implements IDocumentListener {
         this.outputViewer = outputViewer;
 
         this.initialCommands = initialCommands;
+
+        final ICallback<Object, Tuple<String, String>> onContentsReceived = new ICallback<Object, Tuple<String, String>>() {
+
+            public Object call(final Tuple<String, String> result) {
+                Runnable runnable = new Runnable() {
+
+                    public void run() {
+                        if (result != null) {
+                            ScriptConsoleDocumentListener.this.outputViewer.addToConsoleView(result.o1,
+                                    OutputViewer.STYLE_STDOUT);
+                            ScriptConsoleDocumentListener.this.outputViewer.addToConsoleView(result.o2,
+                                    OutputViewer.STYLE_STDERR);
+                            ScriptConsoleDocumentListener.this.outputViewer.revealEndOfDocument();
+                        }
+                    }
+                };
+                RunInUiThread.async(runnable);
+                return null;
+            }
+        };
+
+        handler.setOnContentsReceivedCallback(onContentsReceived);
     }
 
     /**
@@ -239,6 +261,7 @@ public class ScriptConsoleDocumentListener implements IDocumentListener {
         if (result != null) {
             outputViewer.addToConsoleView(result.out, OutputViewer.STYLE_STDOUT);
             outputViewer.addToConsoleView(result.err, OutputViewer.STYLE_STDERR);
+            outputViewer.revealEndOfDocument();
 
             history.commit();
             try {
@@ -267,6 +290,57 @@ public class ScriptConsoleDocumentListener implements IDocumentListener {
             ScriptConsolePartitioner scriptConsolePartitioner = (ScriptConsolePartitioner) partitioner;
             scriptConsolePartitioner.addRange(style);
         }
+    }
+
+    protected void newProccessAddition(int offset, String text) {
+        String indentString = "";
+        boolean addedNewLine = false;
+        boolean addedParen = false;
+        boolean addedCloseParen = false;
+        int addedLen = text.length();
+        if (addedLen == 1) {
+            if (text.equals("\r") || text.equals("\n")) {
+                addedNewLine = true;
+
+            } else if (text.equals("(")) {
+                addedParen = true;
+
+            } else if (text.equals(")")) {
+                addedCloseParen = true;
+            }
+
+        } else if (addedLen == 2) {
+            if (text.equals("\r\n")) {
+                addedNewLine = true;
+            }
+        }
+
+        final String initialText = text;
+        try {
+            doc.replace(offset, initialText.length(), "");
+        } catch (BadLocationException e) {
+            Log.log(e);
+            return;
+        }
+
+        if (addedNewLine) {
+            System.out.println(getCommandLine());
+        }
+        text = convertTabs(text);
+        applyStyleToUserAddedText(text, offset);
+        try {
+            doc.replace(offset, 0, text);
+        } catch (BadLocationException e) {
+            Log.log(e);
+            return;
+        }
+
+        if (addedNewLine) {
+            appendInvitation(true);
+        } else {
+            setCaretOffset(offset + text.length());
+        }
+
     }
 
     /**
@@ -409,6 +483,7 @@ public class ScriptConsoleDocumentListener implements IDocumentListener {
         outputViewer.addToConsoleView(this.prompt.toString(), OutputViewer.STYLE_PROMPT);
         outputViewer.addToConsoleView(commandLine, OutputViewer.STYLE_USERINPUT);
         outputViewer.addToConsoleView(getDelimeter(), OutputViewer.STYLE_USERINPUT);
+        outputViewer.revealEndOfDocument();
 
         final boolean finalAddedNewLine = addedNewLine;
         final String finalDelim = delim;
@@ -460,26 +535,6 @@ public class ScriptConsoleDocumentListener implements IDocumentListener {
                 return null;
             }
         };
-
-        final ICallback<Object, Tuple<String, String>> onContentsReceived = new ICallback<Object, Tuple<String, String>>() {
-
-            public Object call(final Tuple<String, String> result) {
-                Runnable runnable = new Runnable() {
-
-                    public void run() {
-                        if (result != null) {
-                            outputViewer.addToConsoleView(result.o1, OutputViewer.STYLE_STDOUT);
-                            outputViewer.addToConsoleView(result.o2, OutputViewer.STYLE_STDERR);
-                            revealEndOfDocument();
-                        }
-                    }
-                };
-                RunInUiThread.async(runnable);
-                return null;
-            }
-        };
-
-        handler.setOnContentsReceivedCallback(onContentsReceived);
 
         //Handle the command in a thread that doesn't block the U/I.
         new Thread() {
@@ -619,6 +674,7 @@ public class ScriptConsoleDocumentListener implements IDocumentListener {
                         } else {
                             outputViewer.addToConsoleView(fLongestCommonPrefix, OutputViewer.STYLE_STDOUT);
                         }
+                        outputViewer.revealEndOfDocument();
                     }
                 };
                 RunInUiThread.async(r);
@@ -717,14 +773,30 @@ public class ScriptConsoleDocumentListener implements IDocumentListener {
      */
     public void documentChanged(DocumentEvent event) {
         lastChangeMillis = System.currentTimeMillis();
-        startDisconnected();
-        try {
-            int eventOffset = event.getOffset();
-            String eventText = event.getText();
-            proccessAddition(eventOffset, eventText);
-        } finally {
-            stopDisconnected();
-        }
+        final int eventOffset = event.getOffset();
+        final String eventText = event.getText();
+        viewer.setEditable(false); // Prevent other changes while we haven't processed...
+
+        // Doing async because I was having issues pasting multi-line contents:
+        // i.e.: pasting (with \t for indents) in empty console.
+        // if True:
+        //     a = 10
+        //     b = 20
+        //     print a
+        //     print b
+        RunInUiThread.async(new Runnable() {
+
+            @Override
+            public void run() {
+                startDisconnected();
+                try {
+                    newProccessAddition(eventOffset, eventText);
+                } finally {
+                    viewer.setEditable(true);
+                    stopDisconnected();
+                }
+            }
+        });
     }
 
     /**
