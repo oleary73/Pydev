@@ -455,13 +455,15 @@ public class ScriptConsoleDocumentListener implements IDocumentListener {
                 RunInUiThread.async(runnable);
                 return null;
             }
-
         };
+
+        handler.setOnContentsReceivedCallback(onContentsReceived);
+
         //Handle the command in a thread that doesn't block the U/I.
         new Thread() {
             @Override
             public void run() {
-                handler.handleCommand(commandLine, onResponseReceived, onContentsReceived);
+                handler.handleCommand(commandLine, onResponseReceived);
             }
         }.start();
     }

@@ -10,6 +10,7 @@ import org.eclipse.jface.text.Region;
 import org.eclipse.ui.console.IConsoleDocumentPartitioner;
 import org.eclipse.ui.console.TextConsole;
 import org.eclipse.ui.console.TextConsoleViewer;
+import org.python.pydev.shared_core.callbacks.CallbackWithListeners;
 import org.python.pydev.shared_core.log.Log;
 import org.python.pydev.shared_core.string.TextSelectionUtils;
 import org.python.pydev.shared_core.structure.Tuple;
@@ -26,6 +27,7 @@ public class OutputViewer extends TextConsoleViewer {
     private List<IConsoleLineTracker> consoleLineTrackers;
     private IConsoleStyleProvider iConsoleStyleProvider;
     private TextConsole console;
+    public CallbackWithListeners<String> onTextAppended = new CallbackWithListeners<>();
 
     public OutputViewer(TextAndPromptComposite textAndPromptComposite, int styles,
             final ScriptConsolePartitioner partitioner) {
@@ -36,6 +38,8 @@ public class OutputViewer extends TextConsoleViewer {
                 return partitioner;
             }
         });
+        getTextWidget().setAlwaysShowScrollBars(false);
+        this.setEditable(false);
 
     }
 
@@ -128,6 +132,7 @@ public class OutputViewer extends TextConsoleViewer {
                 Log.log(e);
             }
         }
+        onTextAppended.call(out);
     }
 
     /**
@@ -135,7 +140,7 @@ public class OutputViewer extends TextConsoleViewer {
      *
      * @param text the text to be added.
      */
-    protected void appendText(String text) {
+    private void appendText(String text) {
         IDocument doc = getDocument();
         int initialOffset = doc.getLength();
         try {

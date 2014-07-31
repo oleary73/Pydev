@@ -78,15 +78,22 @@ public class ScriptConsoleDocumentListenerTest extends TestCase {
 
                 new ICommandHandler() {
 
+                    ICallback<Object, Tuple<String, String>> onContentsReceived;
+
                     public void handleCommand(String userInput,
-                            ICallback<Object, InterpreterResponse> onResponseReceived,
-                            ICallback<Object, Tuple<String, String>> onContentsReceived) {
+                            ICallback<Object, InterpreterResponse> onResponseReceived) {
                         commandsHandled.add(userInput);
                         onResponseReceived.call(new InterpreterResponse("", "", false, false));
                     }
 
                     public ICompletionProposal[] getTabCompletions(String commandLine, int cursorPosition) {
                         return null;
+                    }
+
+                    @Override
+                    public void setOnContentsReceivedCallback(
+                            ICallback<Object, Tuple<String, String>> onContentsReceived) {
+                        this.onContentsReceived = onContentsReceived;
                     }
                 },
 

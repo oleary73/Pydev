@@ -729,6 +729,7 @@ public class ScriptConsoleViewer extends TextConsoleViewer implements IScriptCon
         this.getTextWidget().setBackground(console.getPydevConsoleBackground());
 
         ScriptConsoleViewer existingViewer = this.console.getViewer();
+        getTextWidget().setAlwaysShowScrollBars(false);
 
         if (existingViewer == null) {
             this.isMainViewer = true;
@@ -919,6 +920,7 @@ public class ScriptConsoleViewer extends TextConsoleViewer implements IScriptCon
      */
     public void clear(boolean addInitialCommands) {
         listener.clear(addInitialCommands);
+        this.textAndPromptComposite.clear();
     }
 
     /**
