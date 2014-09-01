@@ -1,11 +1,39 @@
 from __future__ import nested_scopes
 
+import _pydev_threading as threading
+from pydevd_constants import STATE_RUN
+import sys
+import pydevd_tracing
+from pydevd_comm import GetGlobalDebugger
+
+threadingCurrentThread = threading.currentThread
+
+
 def set_trace_in_qt():
-    import pydevd_tracing
-    from pydevd_comm import GetGlobalDebugger
     debugger = GetGlobalDebugger()
     if debugger is not None:
         pydevd_tracing.SetTrace(debugger.trace_dispatch)
+        
+    
+        
+def remove_trace_in_qt():
+    debugger = GetGlobalDebugger()
+    if debugger is not None:
+        pydevd_tracing.SetTrace(None)
+        
+    frame = sys._getframe()
+    while frame is not None:
+        frame.f_trace = None
+        frame = frame.f_back
+        
+    t = threadingCurrentThread()
+    additional_info = t.additionalInfo
+    additional_info.pydev_state = STATE_RUN
+    additional_info.pydev_step_stop = None
+    additional_info.pydev_step_cmd = None
+    additional_info.pydev_smart_step_stop = None
+    additional_info.pydev_django_resolve_frame = None
+
         
         
 _patched_qt = False
@@ -40,7 +68,10 @@ def patch_qt():
         
         def __call__(self, *args, **kwargs):
             set_trace_in_qt()
-            return self._original(*args, **kwargs)
+            try:
+                return self._original(*args, **kwargs)
+            finally:
+                remove_trace_in_qt()
     
     class StartedSignalWrapper:  # Wrapper for the QThread.started signal
         
@@ -70,7 +101,10 @@ def patch_qt():
             
         def _new_run(self):
             set_trace_in_qt()
-            return self._original_run()
+            try:
+                return self._original_run()
+            finally:
+                remove_trace_in_qt()
     
     class RunnableWrapper(QtCore.QRunnable):  # Wrapper for QRunnable
         
@@ -83,7 +117,10 @@ def patch_qt():
             
         def _new_run(self):
             set_trace_in_qt()
-            return self._original_run()
+            try:
+                return self._original_run()
+            finally:
+                remove_trace_in_qt()
             
     QtCore.QThread = ThreadWrapper
     QtCore.QRunnable = RunnableWrapper
